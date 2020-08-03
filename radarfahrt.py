@@ -11,6 +11,7 @@ from ev3dev2.sensor.lego import TouchSensor, ColorSensor, UltrasonicSensor, Gyro
 from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3, INPUT_4
 from ev3dev2.sound import Sound
 from ev3dev2.led import Leds
+import multiprocessing
 
 # -----------------------------------------------
 # Funktionen
@@ -20,6 +21,12 @@ def wiederholt_messen(sensor, messung, wiederholungen=10):
 	for wiederholung in range(wiederholungen):
 		messung = sensor_function
 	return messung
+
+def radar(motor):
+	motor.on_to_position(SpeedPercent(100), 0)
+	while True:
+		motor.on_to_position(SpeedPercent(5), 90)
+		motor.on_to_position(SpeedPercent(5), -90)
 
 
 # -----------------------------------------------
@@ -48,38 +55,57 @@ startzeit = time.perf_counter()
 #m_motor.on_for_degrees(SpeedPercent(15), -90)
 #m_motor.on_for_degrees(SpeedPercent(15), 45)
 
+radar_prozess = multiprocessing.Process(target=radar, args=(m_motor,))
+radar_prozess.start()
+
 fahrwerkssteurerung.on(0, SpeedPercent(8))
 
 while True: 
-	winkel_liste = [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100]
-	abstandsmessungen = {}
-	m_motor.on_to_position(SpeedPercent(100), winkel_liste[0])
-	for winkel in winkel_liste:
-		print("winkel:", winkel)
-		m_motor.on_to_position(SpeedPercent(10), winkel)
-#		time.sleep(0.5)
-		abstand = wiederholt_messen(ultrasonic_sensor, "distance_centimeters_continuous", 10)
-		print("abstand:", abstand)
-		abstandsmessungen[winkel] = abstand
-	m_motor.on_to_position(SpeedPercent(100), winkel_liste[0])
-	print("abstandsmessungen:", abstandsmessungen)
-	winkel_groester_abstand, groester_abstand = max(abstandsmessungen.items(), key=lambda messung: messung[1])
-	print("winkel_groester_abstand:", winkel_groester_abstand)
-	print("groester_abstand:", groester_abstand)
-	if winkel_groester_abstand < 0 :
-		fahrwerkssteurerung.on(steering=90, speed=SpeedPercent(8))
-		print("1")
-	else :
-		fahrwerkssteurerung.on(steering=-90, speed=SpeedPercent(8))
-		print("2")
-	
-#	fahrwerkssteurerung.on(steering=90, speed=SpeedPercent(8))
-	time.sleep(abs(winkel_groester_abstand/50))
+	abstand = wiederholt_messen(ultrasonic_sensor, "distance_centimeters_continuous", 5)
+	winkel = m_motor.position
+	print(abstand, winkel)
+	if abstand < 10:
+		if winkel < 0:
+			fahrwerkssteurerung.on(steering=90, speed=SpeedPercent(8))
+			print("1")
+		else:
+			fahrwerkssteurerung.on(steering=-90, speed=SpeedPercent(8))
+			print("2")
+		time.sleep(abs(winkel/50))
 	fahrwerkssteurerung.on(0, SpeedPercent(8))
-	print("hallo")
+
+#	winkel_liste = [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100]
+#	abstandsmessungen = {}
+#	m_motor.on_to_position(SpeedPercent(100), winkel_liste[0])
+#	for winkel in winkel_liste:
+#		print("winkel:", winkel)
+#		m_motor.on_to_position(SpeedPercent(10), winkel)
+##		time.sleep(0.5)
+#		abstand = wiederholt_messen(ultrasonic_sensor, "distance_centimeters_continuous", 10)
+#		print("abstand:", abstand)
+#		abstandsmessungen[winkel] = abstand
+#	m_motor.on_to_position(SpeedPercent(100), winkel_liste[0])
+#	print("abstandsmessungen:", abstandsmessungen)
+#	winkel_groester_abstand, groester_abstand = max(abstandsmessungen.items(), key=lambda messung: messung[1])
+#	print("winkel_groester_abstand:", winkel_groester_abstand)
+#	print("groester_abstand:", groester_abstand)
+#	if winkel_groester_abstand < 0 :
+#		fahrwerkssteurerung.on(steering=90, speed=SpeedPercent(8))
+#		print("1")
+#	else :
+#		fahrwerkssteurerung.on(steering=-90, speed=SpeedPercent(8))
+#		print("2")
+#	
+##	fahrwerkssteurerung.on(steering=90, speed=SpeedPercent(8))
+#	time.sleep(abs(winkel_groester_abstand/50))
+#	fahrwerkssteurerung.on(0, SpeedPercent(8))
+#	print("hallo")
 	laufzeit = time.perf_counter() - startzeit
-	if laufzeit > 60:
+	if laufzeit > 20:
 		break
+
+radar_prozess.terminate()
+m_motor.on_to_position(SpeedPercent(100), 0)
 
 fahrwerkssteurerung.off()
 #while True:
